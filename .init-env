@@ -1,0 +1,11 @@
+Docker: Docker version 27.5.1
+Node.js: v18.19.1
+npm: 9.2.0
+Python: 3.12.3
+curl: 8.5.0
+git: 2.43.0
+swagger-cli: 4.0.4
+newman: 6.2.1
+express: 4.21.2 (from dependency tool)
+
+All required system and project dependencies are now installed or noted with their correct version.

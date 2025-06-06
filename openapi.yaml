@@ -1,0 +1,336 @@
+openapi: 3.0.3
+info:
+  title: Mock Ecommerce Sample APIs
+  version: 1.0.0
+  description: Unified stateless mock API service for ecommerce scenarios, including products, cart, order, and authentication. All data is dummy and only for testing/demonstration purposes.
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /products:
+    get:
+      summary: List products
+      description: Retrieve a paginated list of available products.
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination (starts from 1)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          description: Number of products per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: category
+          in: query
+          description: Filter by category identifier
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Full-text product search
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A paginated list of products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  products:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  total:
+                    type: integer
+                  totalPages:
+                    type: integer
+        '400':
+          description: Invalid pagination parameters
+
+  /products/{productId}:
+    get:
+      summary: Get product details
+      description: Retrieve the details for a specific product.
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "sku123456"
+      responses:
+        '200':
+          description: Product details found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetails'
+        '404':
+          description: Product not found
+
+  /cart:
+    get:
+      summary: Get cart contents
+      description: Retrieve contents of the user's mock cart.
+      responses:
+        '200':
+          description: The cart for the current session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+    post:
+      summary: Add or update item in cart
+      description: Add a product to the cart or update its quantity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                productId:
+                  type: string
+                quantity:
+                  type: integer
+                  minimum: 1
+              required:
+                - productId
+                - quantity
+      responses:
+        '200':
+          description: Updated cart after add/update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '400':
+          description: Bad request input
+
+  /cart/{productId}:
+    delete:
+      summary: Remove item from cart
+      description: Remove a product from the cart.
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated cart after removal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '404':
+          description: Product not found in cart
+
+  /order/simulate:
+    post:
+      summary: Simulate order placement
+      description: Simulate placing an order using current cart contents.
+      requestBody:
+        description: Customer information for the simulation (entirely dummy, no real info needed)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customerName:
+                  type: string
+                address:
+                  type: string
+                email:
+                  type: string
+              required:
+                - customerName
+                - address
+                - email
+      responses:
+        '200':
+          description: Mock order simulation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderSimulation'
+        '400':
+          description: Invalid input data
+
+  /auth/login:
+    post:
+      summary: Mock user login
+      description: Simulate user login, returns JWT-like token for demo/test use only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: demo@example.com
+                password:
+                  type: string
+              required:
+                - username
+                - password
+      responses:
+        '200':
+          description: Mock authentication success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expiresIn:
+                    type: integer
+                    description: Expiration in seconds
+        '401':
+          description: Unauthorized - bad credentials
+
+  /auth/me:
+    get:
+      summary: Get current mock user profile
+      description: Get profile information for the current "logged in" user (mocked data).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Mock user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Unauthorized or missing token
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          example: sku123456
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: float
+        image:
+          type: string
+          format: uri
+        category:
+          type: string
+        stock:
+          type: integer
+        rating:
+          type: number
+          format: float
+
+    ProductDetails:
+      allOf:
+        - $ref: "#/components/schemas/Product"
+        - type: object
+          properties:
+            details:
+              type: string
+            specifications:
+              type: object
+              additionalProperties:
+                type: string
+
+    Cart:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+        totalPrice:
+          type: number
+          format: float
+        totalItems:
+          type: integer
+
+    CartItem:
+      type: object
+      properties:
+        productId:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: number
+          format: float
+        image:
+          type: string
+          format: uri
+
+    OrderSimulation:
+      type: object
+      properties:
+        orderId:
+          type: string
+        status:
+          type: string
+          enum: [success, failed]
+        estimatedDelivery:
+          type: string
+          format: date
+        total:
+          type: number
+          format: float
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+
+    UserProfile:
+      type: object
+      properties:
+        userId:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        displayName:
+          type: string
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
