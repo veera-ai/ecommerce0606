@@ -10,41 +10,98 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta, date
 import secrets
+import os
+import json
+from threading import Lock
+
+MOCK_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock_data.json")
+_DATA_CACHE = None
+_DATA_LOCK = Lock()
+
+def _generate_sample_products_and_details(n_products=50):
+    products = []
+    product_details = {}
+    for i in range(1, n_products+1):
+        prod_id = f"sku{i:06d}"
+        product = {
+            "id": prod_id,
+            "name": f"Product {i}",
+            "description": f"Sample product {i}.",
+            "price": float(9.99 + i),
+            "image": f"https://example.com/images/p{i}.jpg",
+            "category": "cat-a" if i % 2 == 0 else "cat-b",
+            "stock": 30 - (i % 15),
+            "rating": round(3.5 + (i % 5) * 0.3, 1)
+        }
+        products.append(product)
+        product_details[prod_id] = {
+            **product,
+            "details": f"Full details for {product['name']}",
+            "specifications": {
+                "color": "Red" if int(prod_id[3:]) % 2 == 0 else "Blue",
+                "size": "Standard",
+            },
+        }
+    return products, product_details
+
+def _load_or_init_mock_data():
+    global _DATA_CACHE
+    with _DATA_LOCK:
+        if _DATA_CACHE is not None:
+            return _DATA_CACHE
+        # Try to load
+        if os.path.exists(MOCK_DATA_FILE):
+            try:
+                with open(MOCK_DATA_FILE, "r") as f:
+                    data = json.load(f)
+            except Exception:
+                data = {}
+        else:
+            data = {}
+
+        # If missing, generate
+        changed = False
+        if "products" not in data or not isinstance(data["products"], list) or len(data["products"]) == 0:
+            products, product_details = _generate_sample_products_and_details()
+            data["products"] = products
+            data["product_details"] = product_details
+            changed = True
+        elif "product_details" not in data or not isinstance(data["product_details"], dict):
+            # If products exist but no details, generate them
+            product_details = {}
+            for product in data["products"]:
+                prod_id = product.get("id", "")
+                product_details[prod_id] = {
+                    **product,
+                    "details": f"Full details for {product['name']}",
+                    "specifications": {
+                        "color": "Red" if int(prod_id[3:]) % 2 == 0 else "Blue",
+                        "size": "Standard",
+                    },
+                }
+            data["product_details"] = product_details
+            changed = True
+        if changed:
+            # Save to file
+            try:
+                with open(MOCK_DATA_FILE, "w") as f:
+                    json.dump(data, f, indent=2)
+            except Exception:
+                pass
+        _DATA_CACHE = data
+        return data
+
+def get_product_list():
+    return _load_or_init_mock_data().get("products", [])
+
+def get_product_details_dict():
+    return _load_or_init_mock_data().get("product_details", {})
 
 app = FastAPI(
     title="Mock Ecommerce Sample APIs",
-    description="Unified stateless mock API service for ecommerce scenarios with in-memory dummy data.",
+    description="Unified stateless mock API service for ecommerce scenarios with data loaded from mock_data.json.",
     version="1.0.0"
 )
-
-# --------
-# Dummy data (for demonstration/testing)
-# --------
-
-PRODUCTS = [
-    {
-        "id": f"sku{i:06d}",
-        "name": f"Product {i}",
-        "description": f"Sample product {i}.",
-        "price": float(9.99 + i),
-        "image": f"https://example.com/images/p{i}.jpg",
-        "category": "cat-a" if i % 2 == 0 else "cat-b",
-        "stock": 30 - (i % 15),
-        "rating": round(3.5 + (i % 5) * 0.3, 1)
-    }
-    for i in range(1, 51)
-]
-
-PRODUCT_DETAILS = {
-    product["id"]: {
-        **product,
-        "details": f"Full details for {product['name']}",
-        "specifications": {
-            "color": "Red" if int(product["id"][3:]) % 2 == 0 else "Blue",
-            "size": "Standard"
-        }
-    } for product in PRODUCTS
-}
 
 MOCK_USER = {
     "userId": "user_demo",
@@ -100,7 +157,8 @@ async def list_products(
 ):
     """Returns a paginated list of products with optional category/search filter."""
 
-    filtered = PRODUCTS
+    products = get_product_list()
+    filtered = products
     if category:
         filtered = [p for p in filtered if p["category"] == category]
     if search:
@@ -127,7 +185,8 @@ async def list_products(
 async def get_product_details(
     productId: str = Path(..., description="Product SKU, e.g., sku123456")
 ):
-    product = PRODUCT_DETAILS.get(productId)
+    product_details = get_product_details_dict()
+    product = product_details.get(productId)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
@@ -140,10 +199,11 @@ async def get_cart(authorization: Optional[str] = Header(None)):
     token = get_token_from_header(authorization)
     token = token or "anonymous"  # demo: non-authenticated users get "anonymous" cart
     cart_items = get_cart_for_token(token)
-    # For each cart item, fill in info from products
+    # For each cart item, fill in info from products loaded from file
     response_items = []
+    products = get_product_list()
     for item in cart_items:
-        product = next((p for p in PRODUCTS if p["id"] == item["productId"]), None)
+        product = next((p for p in products if p["id"] == item["productId"]), None)
         if product:
             response_items.append({
                 "productId": product["id"],
@@ -169,8 +229,9 @@ async def add_update_cart_item(
     quantity = body.get("quantity")
     if not productId or not isinstance(quantity, int) or quantity < 1:
         raise HTTPException(status_code=400, detail="Bad request input")
-    # Check product exists
-    product = next((p for p in PRODUCTS if p["id"] == productId), None)
+    # Check product exists in file-backed store
+    products = get_product_list()
+    product = next((p for p in products if p["id"] == productId), None)
     if not product:
         raise HTTPException(status_code=400, detail="Invalid product")
     token = get_token_from_header(authorization)
@@ -214,8 +275,9 @@ async def simulate_order(
     token = token or "anonymous"
     cart_items = get_cart_for_token(token)
     response_items = []
+    products = get_product_list()
     for item in cart_items:
-        product = next((p for p in PRODUCTS if p["id"] == item["productId"]), None)
+        product = next((p for p in products if p["id"] == item["productId"]), None)
         if product:
             response_items.append({
                 "productId": product["id"],

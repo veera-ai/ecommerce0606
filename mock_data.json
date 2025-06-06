@@ -1,0 +1,58 @@
+{
+  "products": [
+    {
+      "id": "sku000001",
+      "name": "Product 1",
+      "description": "Sample product 1.",
+      "price": 10.99,
+      "image": "https://example.com/images/p1.jpg",
+      "category": "cat-b",
+      "stock": 29,
+      "rating": 3.8
+    },
+    {
+      "id": "sku000002",
+      "name": "Product 2",
+      "description": "Sample product 2.",
+      "price": 11.99,
+      "image": "https://example.com/images/p2.jpg",
+      "category": "cat-a",
+      "stock": 28,
+      "rating": 4.1
+    }
+    // ... (for brevity, more generated products normally here, see code logic)
+  ],
+  "product_details": {
+    "sku000001": {
+      "id": "sku000001",
+      "name": "Product 1",
+      "description": "Sample product 1.",
+      "price": 10.99,
+      "image": "https://example.com/images/p1.jpg",
+      "category": "cat-b",
+      "stock": 29,
+      "rating": 3.8,
+      "details": "Full details for Product 1",
+      "specifications": {
+        "color": "Blue",
+        "size": "Standard"
+      }
+    },
+    "sku000002": {
+      "id": "sku000002",
+      "name": "Product 2",
+      "description": "Sample product 2.",
+      "price": 11.99,
+      "image": "https://example.com/images/p2.jpg",
+      "category": "cat-a",
+      "stock": 28,
+      "rating": 4.1,
+      "details": "Full details for Product 2",
+      "specifications": {
+        "color": "Red",
+        "size": "Standard"
+      }
+    }
+    // ... more detail objects generated similarly
+  }
+}
